@@ -109,7 +109,12 @@ namespace AutoRim.Commands
                 .Where(t => kind == "weapons" ? t.def.IsWeapon
                           : kind == "apparel" ? t is Apparel
                           : (t.def.IsWeapon || t is Apparel))
-                .OrderBy(t => t.Position.DistanceTo(pawn.Position))
+                // Purpose-built weapons before improvised ones, then by value, then by
+                // distance. Sorting on distance alone puts a firewood pile above a revolver,
+                // because RimWorld genuinely counts a log as a melee weapon.
+                .OrderByDescending(t => IsProperWeapon(t.def) ? 1 : 0)
+                .ThenByDescending(t => SafeMarketValue(t))
+                .ThenBy(t => t.Position.DistanceTo(pawn.Position))
                 .Take(400)
                 .ToList();
 
@@ -131,6 +136,12 @@ namespace AutoRim.Commands
                 {
                     entry.Set("melee", thing.def.IsMeleeWeapon);
                     entry.Set("ranged", thing.def.IsRangedWeapon);
+                    entry.Set("marketValue", (int)SafeMarketValue(thing));
+
+                    // Flagged rather than hidden: an improvised weapon is a real option when
+                    // there is nothing better, but nobody should arm a colonist with firewood
+                    // without knowing that is what they are doing.
+                    if (!IsProperWeapon(thing.def)) entry.Set("improvised", true);
                 }
 
                 if (problem != null) entry.Set("unusable", problem);
@@ -143,6 +154,38 @@ namespace AutoRim.Commands
             page.Set("pawn", Refs.Ref(pawn));
             page.Set("currentWeapon", pawn.equipment?.Primary?.LabelNoCount ?? "none");
             return page;
+        }
+
+        /// <summary>
+        /// Distinguishes a real weapon from something that merely can be swung.
+        ///
+        /// RimWorld's ThingDef.IsWeapon is true for wood, steel and other raw resources —
+        /// "in a pinch, a piece of wood can be used as a weapon". Membership of the Weapons
+        /// category is what separates a revolver from firewood.
+        /// </summary>
+        private static bool IsProperWeapon(ThingDef def)
+        {
+            try
+            {
+                if (def.weaponTags != null && def.weaponTags.Count > 0) return true;
+                return def.IsWithinCategory(ThingCategoryDefOf.Weapons);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static float SafeMarketValue(Thing thing)
+        {
+            try
+            {
+                return thing.MarketValue;
+            }
+            catch (Exception)
+            {
+                return 0f;
+            }
         }
 
         /// <summary>Returns why the pawn cannot use this, or null if they can.</summary>

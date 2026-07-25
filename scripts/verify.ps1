@@ -253,6 +253,14 @@ if ($SkipWrites) {
     $weapons = @($equippable.data.items | Where-Object { -not $_.unusable })
     if ($weapons.Count -gt 0) {
         $weapon = $weapons[0]
+
+        # RimWorld counts wood and other raw resources as melee weapons. Ranking by distance
+        # alone would offer firewood ahead of a revolver, so proper weapons must sort first.
+        $proper = @($weapons | Where-Object { -not $_.improvised })
+        if ($proper.Count -gt 0) {
+            Check "proper weapons rank above improvised ones" (-not $weapons[0].improvised) `
+                "top result: $($weapons[0].label) (value $($weapons[0].marketValue))"
+        }
         $eq = CheckOk "pawns.equip" 'pawns.equip' @{ pawn = $subjectId; item = $weapon.id } `
             { param($r) $r.data.summary }
         # The pawn walks to the weapon, so the order is what we can assert synchronously.
