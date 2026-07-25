@@ -95,22 +95,47 @@ namespace AutoRim.Commands
             var workType = DefResolver.Resolve<WorkTypeDef>(args.RequireString("work"), "work");
             int priority = args.RequireIntInRange("priority", 0, 4);
 
-            int previous = Apply(pawn, workType, priority);
+            int previous = Apply(pawn, workType, priority, out int applied);
 
-            return JsonValue.NewObject()
+            var result = JsonValue.NewObject()
                 .Set("pawn", Refs.Ref(pawn))
                 .Set("work", workType.defName)
                 .Set("from", previous)
-                .Set("to", priority)
-                .Set("summary", $"{pawn.LabelShort}: {workType.labelShort ?? workType.label} priority {previous} -> {priority}");
+                .Set("requested", priority)
+                .Set("applied", applied);
+
+            if (applied != priority)
+            {
+                // Never report a change that did not happen. With manual priorities off the
+                // game stores every enabled work type as 3, so a request for 1 silently
+                // becomes 3 - and a caller told "priority is now 1" would act on a fiction.
+                result.Set("note",
+                    "Manual work priorities are turned off, so RimWorld stores every enabled work type as 3. "
+                    + "Turn on manual priorities in the Work tab if you want finer ordering.");
+                result.Set("summary",
+                    $"{pawn.LabelShort}: {workType.labelShort ?? workType.label} priority {previous} -> {applied} (requested {priority}).");
+            }
+            else
+            {
+                result.Set("summary",
+                    $"{pawn.LabelShort}: {workType.labelShort ?? workType.label} priority {previous} -> {applied}");
+            }
+
+            return result;
         }
 
         /// <summary>
-        /// Applies one priority change, returning the previous value. Rejects work the pawn
-        /// cannot do rather than silently doing nothing, which is the failure that leaves a
-        /// player wondering why nobody is cooking.
+        /// Applies one priority change. Returns the previous value and reports, through
+        /// <paramref name="applied"/>, what the game actually stored.
+        ///
+        /// The read-back matters: with manual priorities off RimWorld collapses every enabled
+        /// work type to 3, so the requested and stored values differ. Reporting the request as
+        /// though it were the outcome would have callers acting on a value the game never held.
+        ///
+        /// Work the pawn cannot do is rejected rather than silently ignored, which is the
+        /// failure that leaves a player wondering why nobody is cooking.
         /// </summary>
-        internal static int Apply(Pawn pawn, WorkTypeDef workType, int priority)
+        internal static int Apply(Pawn pawn, WorkTypeDef workType, int priority, out int applied)
         {
             if (pawn.workSettings == null || !pawn.workSettings.EverWork)
                 throw CommandException.Failed($"{pawn.LabelShort} cannot be assigned work.");
@@ -120,14 +145,9 @@ namespace AutoRim.Commands
                     $"{pawn.LabelShort} cannot do {workType.labelShort ?? workType.label}.",
                     "A trait, backstory or missing capacity disables it. pawns.detail lists disabledWork.");
 
-            bool manual = Current.Game?.playSettings?.useWorkPriorities ?? false;
-            if (!manual && priority > 1)
-                throw CommandException.BadArgs(
-                    "Manual work priorities are turned off, so only 0 (off) and 1 (on) are meaningful.",
-                    "Enable manual priorities in the Work tab, or use 0 and 1.");
-
             int previous = pawn.workSettings.GetPriority(workType);
             pawn.workSettings.SetPriority(workType, priority);
+            applied = pawn.workSettings.GetPriority(workType);
             return previous;
         }
     }
@@ -161,13 +181,17 @@ namespace AutoRim.Commands
                     var workType = DefResolver.Resolve<WorkTypeDef>(assignment.RequireString("work"), "work");
                     int priority = assignment.RequireIntInRange("priority", 0, 4);
 
-                    int previous = WorkSetPriorityCommand.Apply(pawn, workType, priority);
+                    int previous = WorkSetPriorityCommand.Apply(pawn, workType, priority, out int stored);
 
-                    applied.Add(JsonValue.NewObject()
+                    var entry = JsonValue.NewObject()
                         .Set("pawn", Refs.Ref(pawn))
                         .Set("work", workType.defName)
                         .Set("from", previous)
-                        .Set("to", priority));
+                        .Set("requested", priority)
+                        .Set("applied", stored);
+
+                    if (stored != priority) entry.Set("clamped", true);
+                    applied.Add(entry);
                 }
                 catch (CommandException ex)
                 {

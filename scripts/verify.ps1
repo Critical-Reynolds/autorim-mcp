@@ -71,6 +71,10 @@ function Section($name) {
 
 Write-Host "`nAutoRim verification" -ForegroundColor Cyan
 
+# Snapshot the audit log up front so the check at the end measures what this run added.
+$auditPath = Join-Path $env:LOCALAPPDATA '..\LocalLow\Ludeon Studios\RimWorld by Ludeon Studios\Config\AutoRim\actions.log'
+$script:auditBefore = if (Test-Path $auditPath) { @(Get-Content $auditPath).Count } else { 0 }
+
 # --- preflight ------------------------------------------------------------------------------
 Section "Preflight"
 $health = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/health" -TimeoutSec 5
@@ -187,11 +191,29 @@ if ($SkipWrites) {
     Section "Writes"
 
     $before = (Rpc 'work.get_priorities' @{ pawn = $subjectId }).data.priorities.Cooking
-    $target = if ($before -eq 1) { 2 } else { 1 }
-    $w = CheckOk "work.set_priority" 'work.set_priority' @{ pawn = $subjectId; work = 'Cooking'; priority = $target } `
+
+    # Toggle enabled/disabled rather than between two non-zero numbers. With manual priorities
+    # off, RimWorld stores every enabled work type as 3, so asking for 1 when it is already
+    # enabled is legitimately a no-op - the earlier version of this check called that a failure
+    # when the mod was behaving correctly.
+    $wOff = CheckOk "work.set_priority (disable)" 'work.set_priority' @{ pawn = $subjectId; work = 'Cooking'; priority = 0 } `
         { param($r) $r.data.summary }
-    $after = (Rpc 'work.get_priorities' @{ pawn = $subjectId }).data.priorities.Cooking
-    Check "work priority actually changed" ($after -eq $target) "was $before, now $after"
+    $afterOff = (Rpc 'work.get_priorities' @{ pawn = $subjectId }).data.priorities.Cooking
+    Check "disabling actually disables the work type" ($afterOff -eq 0) "priority now $afterOff"
+    Check "reported 'applied' matches the game (disable)" ($wOff.data.applied -eq $afterOff) `
+        "reported $($wOff.data.applied), actually $afterOff"
+
+    $wOn = CheckOk "work.set_priority (enable)" 'work.set_priority' @{ pawn = $subjectId; work = 'Cooking'; priority = 1 } `
+        { param($r) $r.data.summary }
+    $afterOn = (Rpc 'work.get_priorities' @{ pawn = $subjectId }).data.priorities.Cooking
+    Check "enabling actually enables the work type" ($afterOn -gt 0) "priority now $afterOn"
+
+    # The command must report what the game stored, never what was requested.
+    Check "reported 'applied' matches the game (enable)" ($wOn.data.applied -eq $afterOn) `
+        "requested $($wOn.data.requested), reported applied $($wOn.data.applied), actually $afterOn"
+
+    # Restore whatever it was before the test.
+    Rpc 'work.set_priority' @{ pawn = $subjectId; work = 'Cooking'; priority = $before } | Out-Null
 
     CheckOk "work.set_bulk" 'work.set_bulk' @{ assignments = @(
         @{ pawn = $subjectId; work = 'Hauling'; priority = 3 },
@@ -282,13 +304,25 @@ if ($SkipWrites) {
     # --- persistence ------------------------------------------------------------------------
     Section "Persistence (save round-trip)"
 
+    # Refuse to start if a previous run left its marker behind: renaming again would bake the
+    # debris in permanently, since the "original" name we restore is whatever we read here.
+    if ($subject.name -like 'AutoRimVerify*') {
+        Write-Host "  [WARN] pawn is still named '$($subject.name)' from an earlier run." -ForegroundColor Yellow
+        Write-Host "         Rename them in game before re-running, or the original name is lost." -ForegroundColor Yellow
+    }
+
+    $originalNick = $subject.name
     $marker = "AutoRimVerify$(Get-Random -Minimum 100000 -Maximum 999999)"
     $rn = CheckOk "pawns.rename (unique marker)" 'pawns.rename' @{ pawn = $subjectId; nick = $marker } `
         { param($r) $r.data.summary }
 
     if ($rn.ok) {
+        # try/finally so the name is restored even if a check below throws. The previous
+        # version restored on the happy path only, and left a test marker as a colonist's
+        # permanent name when anything above it failed.
+        try {
         $saveName = 'AutoRim-verify'
-        $sv = CheckOk "control.save" 'control.save' @{ name = 'verify' } { param($r) $r.data.file } 60000
+        $sv = CheckOk "control.save" 'control.save' @{ name = 'verify' }
         Start-Sleep -Milliseconds 1500
 
         $savePath = Join-Path $savesDir "$saveName.rws"
@@ -300,16 +334,32 @@ if ($SkipWrites) {
                 "marker '$marker' found in serialized save - the change survives save/reload"
             Check "save is well-formed XML" ($null -ne ([xml]$content)) "parsed without error"
         }
-
-        # Put the name back so the testbed stays usable.
-        Rpc 'pawns.rename' @{ pawn = $subjectId; nick = $subject.name } | Out-Null
+        } finally {
+            # Always put the name back, and prove it took. A verification run must not leave
+            # anything behind in someone's colony.
+            Rpc 'pawns.rename' @{ pawn = $subjectId; nick = $originalNick } | Out-Null
+            $restored = (Rpc 'pawns.detail' @{ pawn = $subjectId }).data.name
+            Check "pawn name restored after the test" ($restored -eq $originalNick) `
+                "expected '$originalNick', now '$restored'"
+        }
     }
 
     # --- audit log --------------------------------------------------------------------------
     Section "Audit"
+    # The audit log is append-only and persists across sessions, so its mere existence proves
+    # nothing. What matters is that this run added no entries: verification never confirms a
+    # destructive action.
     $logPath = Join-Path $env:LOCALAPPDATA '..\LocalLow\Ludeon Studios\RimWorld by Ludeon Studios\Config\AutoRim\actions.log'
-    Check "no destructive actions were executed" (-not (Test-Path $logPath)) `
-        "actions.log absent, as expected - verification never confirms anything destructive"
+    $auditAfter = if (Test-Path $logPath) { @(Get-Content $logPath).Count } else { 0 }
+    Check "verification recorded no destructive actions" ($auditAfter -eq $script:auditBefore) `
+        "actions.log had $($script:auditBefore) entries before, $auditAfter after"
+
+    if ($auditAfter -gt 0) {
+        Write-Host "         historic entries (not from this run):" -ForegroundColor DarkGray
+        Get-Content $logPath | Select-Object -Last 3 | ForEach-Object {
+            Write-Host "           $($_.Substring(0,[Math]::Min(120,$_.Length)))" -ForegroundColor DarkGray
+        }
+    }
 }
 
 # --- response sizes ---------------------------------------------------------------------------
