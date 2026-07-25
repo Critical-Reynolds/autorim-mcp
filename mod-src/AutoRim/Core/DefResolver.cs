@@ -167,15 +167,24 @@ namespace AutoRim.Core
             var tokens = Normalize(query).Split(' ').Where(t => t.Length >= 3).ToArray();
             if (tokens.Length == 0) return new List<T>();
 
+            // Rank by how many of the query's words a candidate matches, not merely whether it
+            // matches one. Asking for "make simple meal" once suggested "make LMG" and "make
+            // wort" - everything sharing the throwaway word "make" - while "cook simple meal",
+            // which matches two words of three, never surfaced. These candidates are the
+            // caller's only route to recovering from a wrong guess, so ordering matters.
             return DefDatabase<T>.AllDefsListForReading
                 .Where(def => filter == null || filter(def))
-                .Where(def =>
+                .Select(def =>
                 {
                     string haystack = Normalize(LabelOf(def) + " " + def.defName);
-                    return tokens.Any(token => haystack.Contains(token));
+                    int matched = tokens.Count(token => haystack.Contains(token));
+                    return new { Def = def, Matched = matched };
                 })
-                .OrderBy(def => LabelOf(def).Length)
+                .Where(x => x.Matched > 0)
+                .OrderByDescending(x => x.Matched)
+                .ThenBy(x => LabelOf(x.Def).Length)
                 .Take(limit)
+                .Select(x => x.Def)
                 .ToList();
         }
 

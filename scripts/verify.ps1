@@ -240,6 +240,25 @@ if ($SkipWrites) {
         CheckOk "zones.delete" 'zones.delete' @{ zone = 'AutoRimVerify' } | Out-Null
     }
 
+    # Regression: Zone.AddCell logs an error and adds the cell anyway when something in it
+    # cannot share space with a zone. Zoning over a blueprint therefore used to produce one
+    # red error per cell and an invalid zone, instead of skipping the cell with a reason.
+    $bpCell = @{ x = $centre.x + 6; z = $centre.z + 6 }
+    $bp = Rpc 'build.place' @{ thing = 'Wall'; cell = $bpCell }
+    if ($bp.ok) {
+        $overlap = Rpc 'zones.create_stockpile' @{ area = @{ x1 = $bpCell.x; z1 = $bpCell.z; x2 = $bpCell.x; z2 = $bpCell.z }; name = 'AutoRimOverlap' }
+        $reasons = if ($overlap.ok) { @($overlap.data.skipped) } else { @($overlap.error.data.skipped) }
+        $blocked = @($reasons | Where-Object { $_.reason -like '*occupied by*' })
+        Check "zoning over a blueprint is refused with a reason" `
+            (($overlap.ok -eq $false) -and $blocked.Count -gt 0) `
+            $(if ($blocked.Count -gt 0) { "reason: $($blocked[0].reason)" } else { "no 'occupied by' reason returned" })
+
+        if ($overlap.ok) { Rpc 'zones.delete' @{ zone = 'AutoRimOverlap' } | Out-Null }
+        Rpc 'designate.cancel' @{ cell = $bpCell } | Out-Null
+    } else {
+        Write-Host "  [skip] could not place a test blueprint ($($bp.error.message))" -ForegroundColor DarkYellow
+    }
+
     # Hunt a real animal rather than sweeping an empty corner, so this actually proves the
     # designation lands rather than passing on "considered 0".
     $wild = (Rpc 'pawns.list' @{ filter = 'wild'; limit = 3 }).data.items
@@ -265,6 +284,43 @@ if ($SkipWrites) {
 
     CheckOk "build.check" 'build.check' @{ thing = 'steel wall'; cell = $centre } `
         { param($r) "canPlace=$($r.data.canPlace) stuff=$($r.data.stuff)" } | Out-Null
+
+    # --- bills ------------------------------------------------------------------------------
+    # Skipped on colonies with no production benches, which is why this went untested for so
+    # long: every earlier test colony had none.
+    Section "Bills"
+    $benchList = @((Rpc 'bills.list_workbenches' @{}).data.items | Where-Object { $_.usable })
+    if ($benchList.Count -gt 0) {
+        $bench = $benchList[0].id
+        $billsBefore = (Rpc 'bills.list' @{ bench = $bench }).data.count
+
+        $recipes = (Rpc 'query.search_defs' @{ type = 'recipe'; query = 'simple meal'; limit = 1 }).data.results
+        if ($recipes.Count -gt 0) {
+            $recipe = $recipes[0].defName
+            $add = CheckOk "bills.add" 'bills.add' @{ bench = $bench; recipe = $recipe; repeat = 'target'; targetCount = 30 } `
+                { param($r) $r.data.summary }
+
+            if ($add.ok) {
+                $idx = $add.data.bill.index
+                $set = CheckOk "bills.set (target + worker)" 'bills.set' @{ bench = $bench; index = $idx; targetCount = 45; worker = $subjectId } `
+                    { param($r) $r.data.summary }
+                Check "bill target actually changed" ($set.data.bill.targetCount -eq 45) `
+                    "targetCount now $($set.data.bill.targetCount)"
+                Check "bill worker restriction applied" ($null -ne $set.data.bill.restrictedTo) `
+                    "restricted to $($set.data.bill.restrictedTo.label)"
+
+                CheckOk "bills.remove" 'bills.remove' @{ bench = $bench; index = $idx } { param($r) $r.data.summary } | Out-Null
+                $billsAfter = (Rpc 'bills.list' @{ bench = $bench }).data.count
+                Check "bill count restored" ($billsAfter -eq $billsBefore) "$billsBefore before, $billsAfter after"
+            }
+        }
+
+        # A recipe the bench cannot run must be refused, not silently queued forever.
+        $bad = Rpc 'bills.add' @{ bench = $bench; recipe = 'Make_Gun_LMG' }
+        Check "unrunnable recipe refused" (-not $bad.ok) "$($bad.error.code): $($bad.error.message)"
+    } else {
+        Write-Host "  [skip] no usable workbenches on this colony" -ForegroundColor DarkYellow
+    }
 
     # --- equipment --------------------------------------------------------------------------
     Section "Equipment"

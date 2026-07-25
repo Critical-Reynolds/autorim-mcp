@@ -104,6 +104,15 @@ namespace AutoRim.Commands
             return result;
         }
 
+        /// <summary>Turns the skip tally into something a caller can act on.</summary>
+        public static JsonValue DescribeSkipped(Dictionary<string, int> skipped)
+        {
+            var array = JsonValue.NewArray();
+            foreach (var entry in skipped.OrderByDescending(e => e.Value))
+                array.Add(JsonValue.NewObject().Set("reason", entry.Key).Set("count", entry.Value));
+            return array;
+        }
+
         public static StoragePriority ParsePriority(string value)
         {
             switch ((value ?? "").Trim().ToLowerInvariant())
@@ -160,34 +169,58 @@ namespace AutoRim.Commands
             string name = args.OptString("name");
             if (!string.IsNullOrEmpty(name)) zone.label = name;
 
-            int added = AddCells(zone, cells, map);
+            int added = AddCells(zone, cells, map, out var skipped);
 
             if (added == 0)
             {
                 zone.Delete();
-                throw CommandException.Failed(
-                    "Every cell in that rectangle is already zoned or unusable.",
-                    "Pick an area that is not already covered by a zone.");
+                var error = CommandException.Failed(
+                    "No cell in that rectangle can hold a stockpile.",
+                    "Zones cannot overlap each other, or sit on buildings and blueprints.");
+                error.Payload = JsonValue.NewObject().Set("skipped", ZoneHelpers.DescribeSkipped(skipped));
+                throw error;
             }
 
             if (args.Has("priority"))
                 zone.settings.Priority = ZoneHelpers.ParsePriority(args.RequireString("priority"));
 
-            return JsonValue.NewObject()
+            var result = JsonValue.NewObject()
                 .Set("zone", ZoneHelpers.DescribeZone(zone, map.zoneManager.AllZones.IndexOf(zone)))
                 .Set("cellsAdded", added)
-                .Set("cellsSkipped", cells.Count - added)
-                .Set("summary", $"Created stockpile '{zone.label}' with {added} cells.");
+                .Set("cellsSkipped", cells.Count - added);
+
+            if (skipped.Count > 0) result.Set("skipped", ZoneHelpers.DescribeSkipped(skipped));
+
+            return result.Set("summary", $"Created stockpile '{zone.label}' with {added} of {cells.Count} cells.");
         }
 
         internal static int AddCells(Zone zone, List<IntVec3> cells, Map map)
         {
+            return AddCells(zone, cells, map, out _);
+        }
+
+        /// <summary>
+        /// Adds what it legitimately can and reports why the rest were skipped.
+        ///
+        /// Validation has to happen here because Zone.AddCell does not refuse bad cells - it
+        /// logs an error and adds them anyway. Dropping a stockpile over a wall blueprint
+        /// therefore produced one red error per cell and a zone in an invalid state, rather
+        /// than a clean refusal.
+        /// </summary>
+        internal static int AddCells(Zone zone, List<IntVec3> cells, Map map, out Dictionary<string, int> skipped)
+        {
+            skipped = new Dictionary<string, int>();
             int added = 0;
+
             foreach (var cell in cells)
             {
-                // A cell can only belong to one zone, and the game will throw if we force it.
-                if (map.zoneManager.ZoneAt(cell) != null) continue;
-                if (!cell.InBounds(map)) continue;
+                if (!cell.InBounds(map)) { Count(skipped, "outside the map"); continue; }
+
+                // A cell can belong to only one zone.
+                if (map.zoneManager.ZoneAt(cell) != null) { Count(skipped, "already in another zone"); continue; }
+
+                var blocker = Blocker(map, cell);
+                if (blocker != null) { Count(skipped, $"occupied by {blocker}"); continue; }
 
                 try
                 {
@@ -196,10 +229,31 @@ namespace AutoRim.Commands
                 }
                 catch (Exception)
                 {
-                    // Fogged or otherwise unusable cell; skip it.
+                    Count(skipped, "rejected by the game");
                 }
             }
+
             return added;
+        }
+
+        /// <summary>Label of the first thing in the cell that cannot share space with a zone.</summary>
+        private static string Blocker(Map map, IntVec3 cell)
+        {
+            var things = map.thingGrid.ThingsListAt(cell);
+            if (things == null) return null;
+
+            for (int i = 0; i < things.Count; i++)
+            {
+                var def = things[i]?.def;
+                if (def != null && !def.CanOverlapZones) return def.label ?? def.defName;
+            }
+            return null;
+        }
+
+        private static void Count(IDictionary<string, int> counts, string reason)
+        {
+            counts.TryGetValue(reason, out int existing);
+            counts[reason] = existing + 1;
         }
     }
 
@@ -219,14 +273,16 @@ namespace AutoRim.Commands
             string name = args.OptString("name");
             if (!string.IsNullOrEmpty(name)) zone.label = name;
 
-            int added = ZonesCreateStockpileCommand.AddCells(zone, cells, map);
+            int added = ZonesCreateStockpileCommand.AddCells(zone, cells, map, out var skipped);
 
             if (added == 0)
             {
                 zone.Delete();
-                throw CommandException.Failed(
-                    "Every cell in that rectangle is already zoned or cannot be sown.",
-                    "Growing zones need open, sowable ground.");
+                var error = CommandException.Failed(
+                    "No cell in that rectangle can hold a growing zone.",
+                    "Growing zones need open ground that is not already zoned or built on.");
+                error.Payload = JsonValue.NewObject().Set("skipped", ZoneHelpers.DescribeSkipped(skipped));
+                throw error;
             }
 
             if (args.Has("plant"))
