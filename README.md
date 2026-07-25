@@ -7,6 +7,8 @@ research", "wall off the north approach" — and it happens in the live game.
 
 Built for **RimWorld 1.6** (developed against 1.6.4871).
 
+https://steamcommunity.com/sharedfiles/filedetails/?id=3771536321
+
 ---
 
 ## How it works
