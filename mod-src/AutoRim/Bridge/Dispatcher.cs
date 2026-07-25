@@ -28,15 +28,29 @@ namespace AutoRim.Bridge
         private static readonly ConcurrentQueue<PendingCommand> Queue = new ConcurrentQueue<PendingCommand>();
         private static readonly Stopwatch Clock = Stopwatch.StartNew();
 
-        private static long _lastPumpMs = long.MinValue;
+        /// <summary>Negative means the pump has never run. See GameLoopAlive.</summary>
+        private static long _lastPumpMs = -1;
         private static int _queueDepth;
 
         /// <summary>
         /// True while the main-thread pump has run recently. The socket thread uses this
         /// instead of reading game state directly, which it must not do.
         /// </summary>
-        public static bool GameLoopAlive =>
-            Clock.ElapsedMilliseconds - Interlocked.Read(ref _lastPumpMs) < LivenessWindowMs;
+        public static bool GameLoopAlive
+        {
+            get
+            {
+                long last = Interlocked.Read(ref _lastPumpMs);
+
+                // Sentinel check first, and deliberately not by subtraction. The pump only runs
+                // inside a GameComponent, so at the main menu it has never run at all; doing
+                // the arithmetic against a "never" sentinel overflows and reports the loop as
+                // alive, which then queues commands that can never be drained.
+                if (last < 0) return false;
+
+                return Clock.ElapsedMilliseconds - last < LivenessWindowMs;
+            }
+        }
 
         public static int QueueDepth => Volatile.Read(ref _queueDepth);
 
