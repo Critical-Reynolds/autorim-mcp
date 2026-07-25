@@ -39,8 +39,19 @@ Write-Host "Installing to $target" -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path (Join-Path $target 'About')      | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $target 'Assemblies') | Out-Null
 
-Copy-Item (Join-Path $source 'About\About.xml')      (Join-Path $target 'About')      -Force
+# Copy the whole About folder: it carries Preview.png for the Workshop listing and, once
+# published, PublishedFileId.txt. Losing that file would create a duplicate Workshop item
+# instead of updating the existing one, so it is preserved rather than overwritten.
+Copy-Item (Join-Path $source 'About\*') (Join-Path $target 'About') -Recurse -Force
 Copy-Item (Join-Path $source 'Assemblies\AutoRim.dll') (Join-Path $target 'Assemblies') -Force
+
+# RimWorld writes PublishedFileId.txt into the installed mod on first upload. Mirror it back
+# to the repo copy so a later deploy does not drop it.
+$publishedId = Join-Path $target 'About\PublishedFileId.txt'
+if (Test-Path $publishedId) {
+    Copy-Item $publishedId (Join-Path $source 'About') -Force
+    Write-Host "Workshop item id: $((Get-Content $publishedId -Raw).Trim())" -ForegroundColor DarkGray
+}
 
 $stamp = (Get-Item $dll).LastWriteTime
 Write-Host ""

@@ -2,13 +2,41 @@
 <ModMetaData>
   <packageId>autorim.mcp</packageId>
   <name>AutoRim - MCP Bridge</name>
-  <author>AutoRim</author>
+  <author>Critical-Reynolds</author>
+  <modVersion>0.1.0</modVersion>
+  <url>https://github.com/Critical-Reynolds/autorim-mcp</url>
   <supportedVersions>
     <li>1.6</li>
   </supportedVersions>
-  <description>Exposes the colony to an external MCP server over a loopback-only bridge, so an AI assistant can read colony state and issue orders in natural language.
+  <description>Control your colony by describing what you want, in plain English, through an AI assistant.
 
-The bridge listens on 127.0.0.1 only and requires a token that is generated on first run. Destructive actions require explicit confirmation. The bridge can be disabled at any time from this mod's settings.
+"Who should be cooking?" - "Set up a hunting run." - "Queue electricity research." - "Wall off the north approach."
 
-No Harmony patching is performed.</description>
+PLEASE READ BEFORE INSTALLING
+
+1. This mod opens a network listener.
+
+It runs a small HTTP server inside RimWorld so an external program can read colony state and issue orders. It binds to 127.0.0.1 only, so nothing outside your own machine can reach it, and every request must present a random token that the mod writes to your RimWorld config folder on first run. You can turn the whole thing off at any time in Options - Mod settings - AutoRim.
+
+This is stated plainly because you deserve to know a mod is opening a socket. The full source is on GitHub, linked above.
+
+2. This mod does nothing on its own.
+
+It is one half of a pair. You also need the companion MCP server (Node.js) and an MCP-capable AI client such as Claude Code or Claude Desktop. Without those, installing this changes nothing about your game. Setup instructions are in the GitHub repository.
+
+3. It can do irreversible things, and asks first.
+
+Reversible actions - work priorities, designations, research, bills, zones, construction - happen immediately. Irreversible ones - slaughtering animals, executing or releasing prisoners, deconstruction, completing a trade, launching a caravan, queuing surgery - refuse to run unless explicitly confirmed, and return a description of the consequences instead. Before any confirmed destructive action the mod writes a rolling restore point named AutoRim-safety, and logs what it did.
+
+WHAT IT COVERS
+
+Around 115 commands across 24 areas: colony overview, pawns, work priorities, direct orders, designations, construction, research, workbench bills, zones and stockpiles, storage filters, allowed areas, apparel/food/drug policies, schedules, medical and surgery, animals, prisoners, trading, caravans, world and factions, ideoligions, map queries, definition lookup, and analysis tools that rank colonists for a job and find bottlenecks.
+
+COMPATIBILITY
+
+No Harmony patching is performed. The mod attaches through a standard GameComponent and reads game state through public APIs, so it should not conflict with other mods. It has been developed and tested against RimWorld 1.6 with Core and Ideology. Other expansions are detected and their features gated, but are not extensively tested. Save files are not modified by the mod's presence; removing it leaves your colony intact.
+
+This is an early release. Bug reports and issues are welcome on GitHub.
+
+Not affiliated with or endorsed by Ludeon Studios.</description>
 </ModMetaData>
