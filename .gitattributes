@@ -1,0 +1,15 @@
+# Normalise to LF in the repository; Git checks out native line endings on Windows.
+* text=auto eol=lf
+
+# PowerShell and MSBuild files are happier with CRLF on the platform they run on.
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.csproj text eol=crlf
+*.sln text eol=crlf
+
+# Never touch binaries.
+*.dll binary
+*.pdb binary
+*.png binary
+*.jpg binary
+*.rws binary

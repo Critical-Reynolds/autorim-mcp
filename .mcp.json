@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "rimworld": {
+      "command": "node",
+      "args": ["server/dist/index.js"]
+    }
+  }
+}

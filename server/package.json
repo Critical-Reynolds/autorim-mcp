@@ -1,0 +1,27 @@
+{
+  "name": "autorim-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP server exposing a running RimWorld colony to Claude via the AutoRim in-game bridge.",
+  "type": "module",
+  "bin": {
+    "autorim-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "inspect": "npm run build && npx @modelcontextprotocol/inspector node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

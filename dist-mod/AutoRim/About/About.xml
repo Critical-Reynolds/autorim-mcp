@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <packageId>autorim.mcp</packageId>
+  <name>AutoRim - MCP Bridge</name>
+  <author>AutoRim</author>
+  <supportedVersions>
+    <li>1.6</li>
+  </supportedVersions>
+  <description>Exposes the colony to an external MCP server over a loopback-only bridge, so an AI assistant can read colony state and issue orders in natural language.
+
+The bridge listens on 127.0.0.1 only and requires a token that is generated on first run. Destructive actions require explicit confirmation. The bridge can be disabled at any time from this mod's settings.
+
+No Harmony patching is performed.</description>
+</ModMetaData>

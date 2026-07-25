@@ -1,0 +1,76 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>AutoRim</AssemblyName>
+    <RootNamespace>AutoRim</RootNamespace>
+    <Version>0.1.0</Version>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <DebugType>none</DebugType>
+    <Deterministic>true</Deterministic>
+    <!-- The mod ships a single DLL; nothing else may land in Assemblies/. -->
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <!-- Override on the command line with -p:RimWorldDir=... for a non-default install. -->
+  <PropertyGroup Condition="'$(RimWorldDir)' == ''">
+    <RimWorldDir>C:\Program Files (x86)\Steam\steamapps\common\RimWorld</RimWorldDir>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <RimWorldManagedDir>$(RimWorldDir)\RimWorldWin64_Data\Managed</RimWorldManagedDir>
+    <ModDeployDir>$(MSBuildProjectDirectory)\..\dist-mod\AutoRim</ModDeployDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!--
+    Game assemblies are reference-only. Private=false is mandatory: copying these into the
+    mod folder gives the CLR a second copy of every RimWorld type and breaks type identity.
+  -->
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(RimWorldManagedDir)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(RimWorldManagedDir)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(RimWorldManagedDir)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(RimWorldManagedDir)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(RimWorldManagedDir)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>$(RimWorldManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="VerifyRimWorldRefs" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('$(RimWorldManagedDir)\Assembly-CSharp.dll')"
+           Text="RimWorld assemblies not found at '$(RimWorldManagedDir)'. Pass -p:RimWorldDir=&lt;install path&gt;." />
+  </Target>
+
+  <Target Name="DeployToModFolder" AfterTargets="Build">
+    <MakeDir Directories="$(ModDeployDir)\Assemblies" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModDeployDir)\Assemblies" />
+    <Message Importance="high" Text="[AutoRim] Deployed $(TargetFileName) -> $(ModDeployDir)\Assemblies" />
+  </Target>
+
+</Project>

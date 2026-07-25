@@ -1,0 +1,28 @@
+# --- build output -------------------------------------------------------------------------
+mod-src/bin/
+mod-src/obj/
+server/dist/
+server/node_modules/
+
+# The mod DLL is a build artifact; deploy.ps1 regenerates it. Committing a binary that has to
+# match the source exactly is a good way to ship a stale one.
+dist-mod/AutoRim/Assemblies/*.dll
+dist-mod/AutoRim/Assemblies/*.pdb
+
+# --- runtime state ------------------------------------------------------------------------
+# The bridge token is a shared secret. It normally lives in RimWorld's config directory, but
+# never let a stray copy in the tree reach a public repo.
+**/bridge.token
+**/actions.log
+
+# --- editor / OS --------------------------------------------------------------------------
+.vs/
+.idea/
+*.user
+*.suo
+Thumbs.db
+desktop.ini
+
+# --- misc ---------------------------------------------------------------------------------
+*.log
+npm-debug.log*
