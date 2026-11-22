@@ -5,7 +5,8 @@ Natural-language control of a running RimWorld colony, through MCP.
 Ask for what you want — "who should be cooking?", "set up a hunting run", "queue electricity
 research", "wall off the north approach" — and it happens in the live game.
 
-Built for **RimWorld 1.6** (developed against 1.6.4871).
+Supports **RimWorld 1.6 and 1.7** with a single mod DLL. The build uses 1.6.4871 reference
+assemblies, and RimWorld 1.7 loads it through Waylith’s Unity compatibility layer.
 
 https://steamcommunity.com/sharedfiles/filedetails/?id=3771536321
 
@@ -36,7 +37,7 @@ rather than intercepted. Nothing but `AutoRim.dll` is loaded into the game — e
 layer is hand-rolled, because shipping a second copy of a common library into RimWorld's
 AppDomain is a well-known source of conflicts with other mods.
 
-**Socket threads never touch the game.** Unity and RimWorld are not thread-safe. Requests are
+**Socket threads never touch the game.** RimWorld’s game APIs are not thread-safe. Requests are
 queued and executed inside `GameComponentUpdate` under a per-frame time budget; the socket
 thread only ever waits on a handle. This is the load-bearing part of the design.
 
@@ -53,6 +54,10 @@ cd server
 npm install
 npm run build
 ```
+
+On Linux, build the mod with `dotnet build mod-src -c Release` and copy
+`dist-mod/AutoRim` into the game's `Mods` directory. Build the MCP server with the same
+npm commands shown above.
 
 Then in RimWorld: **Mods** → enable **AutoRim - MCP Bridge** → restart when prompted.
 
