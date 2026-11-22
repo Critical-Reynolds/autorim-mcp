@@ -25,7 +25,7 @@ if (-not (Test-Path $modsDir)) {
 
 if (-not $SkipBuild) {
     Write-Host "Building..." -ForegroundColor Cyan
-    dotnet build (Join-Path $repoRoot 'mod-src\AutoRim.csproj') -c Debug -v minimal -nologo -p:RimWorldDir=$RimWorldDir
+    dotnet build (Join-Path $repoRoot 'mod-src\AutoRim.csproj') -c Debug -v minimal -nologo
     if ($LASTEXITCODE -ne 0) { throw "Build failed with exit code $LASTEXITCODE." }
 }
 
@@ -62,5 +62,6 @@ Write-Host "  1. Launch RimWorld."
 Write-Host "  2. Mods -> enable 'AutoRim - MCP Bridge' -> restart when prompted."
 Write-Host "  3. Load a save, then check the bridge:  .\scripts\smoke.ps1"
 Write-Host ""
-Write-Host "Log: $env:LOCALAPPDATA" -NoNewline
-Write-Host "Low\Ludeon Studios\RimWorld by Ludeon Studios\Player.log"
+$logDir = Join-Path $env:LOCALAPPDATA '..\LocalLow\Ludeon Studios\RimWorld by Ludeon Studios'
+if (Test-Path (Join-Path $RimWorldDir 'Waylith.dll')) { $logDir = Join-Path $logDir 'Logs' }
+Write-Host "Log: $(Join-Path $logDir 'Player.log')"

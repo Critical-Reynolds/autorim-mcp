@@ -31,9 +31,19 @@ const DEFAULT_PORT = 7789;
 const DEFAULT_TIMEOUT_MS = 20000;
 
 function configRoot(): string {
-  // RimWorld writes to LocalLow, which has no standard env var on Windows.
   const override = process.env.AUTORIM_CONFIG_DIR;
   if (override) return override;
+
+  if (process.platform === "linux") {
+    return join(
+      process.env.XDG_CONFIG_HOME || join(homedir(), ".config"),
+      "unity3d",
+      "Ludeon Studios",
+      "RimWorld by Ludeon Studios",
+      "Config",
+      "AutoRim",
+    );
+  }
 
   return join(
     homedir(),

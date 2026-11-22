@@ -7,6 +7,7 @@
   <url>https://github.com/Critical-Reynolds/autorim-mcp</url>
   <supportedVersions>
     <li>1.6</li>
+    <li>1.7</li>
   </supportedVersions>
   <description>Control your colony by describing what you want, in plain English, through an AI assistant.
 
@@ -34,7 +35,7 @@ Around 115 commands across 24 areas: colony overview, pawns, work priorities, di
 
 COMPATIBILITY
 
-No Harmony patching is performed. The mod attaches through a standard GameComponent and reads game state through public APIs, so it should not conflict with other mods. It has been developed and tested against RimWorld 1.6 with Core and Ideology. Other expansions are detected and their features gated, but are not extensively tested. Save files are not modified by the mod's presence; removing it leaves your colony intact.
+No Harmony patching is performed. The mod attaches through a standard GameComponent and reads game state through public APIs, so it should not conflict with other mods. The same mod DLL supports RimWorld 1.6 and 1.7. It has been developed and tested against RimWorld 1.6 with Core and Ideology. Other expansions are detected and their features gated, but are not extensively tested. Save files are not modified by the mod's presence; removing it leaves your colony intact.
 
 This is an early release. Bug reports and issues are welcome on GitHub.
 

@@ -17,55 +17,15 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
-  <!-- Override on the command line with -p:RimWorldDir=... for a non-default install. -->
-  <PropertyGroup Condition="'$(RimWorldDir)' == ''">
-    <RimWorldDir>C:\Program Files (x86)\Steam\steamapps\common\RimWorld</RimWorldDir>
-  </PropertyGroup>
-
   <PropertyGroup>
-    <RimWorldManagedDir>$(RimWorldDir)\RimWorldWin64_Data\Managed</RimWorldManagedDir>
     <ModDeployDir>$(MSBuildProjectDirectory)\..\dist-mod\AutoRim</ModDeployDir>
   </PropertyGroup>
 
+  <!-- Target the shared API. RimWorld 1.7 redirects Unity references to its Waylith stubs. -->
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="Krafs.Rimworld.Ref" Version="1.6.4871" PrivateAssets="all" IncludeAssets="compile" />
   </ItemGroup>
-
-  <!--
-    Game assemblies are reference-only. Private=false is mandatory: copying these into the
-    mod folder gives the CLR a second copy of every RimWorld type and breaks type identity.
-  -->
-  <ItemGroup>
-    <Reference Include="Assembly-CSharp">
-      <HintPath>$(RimWorldManagedDir)\Assembly-CSharp.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine">
-      <HintPath>$(RimWorldManagedDir)\UnityEngine.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.CoreModule">
-      <HintPath>$(RimWorldManagedDir)\UnityEngine.CoreModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.IMGUIModule">
-      <HintPath>$(RimWorldManagedDir)\UnityEngine.IMGUIModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.TextRenderingModule">
-      <HintPath>$(RimWorldManagedDir)\UnityEngine.TextRenderingModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.InputLegacyModule">
-      <HintPath>$(RimWorldManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-  </ItemGroup>
-
-  <Target Name="VerifyRimWorldRefs" BeforeTargets="BeforeBuild">
-    <Error Condition="!Exists('$(RimWorldManagedDir)\Assembly-CSharp.dll')"
-           Text="RimWorld assemblies not found at '$(RimWorldManagedDir)'. Pass -p:RimWorldDir=&lt;install path&gt;." />
-  </Target>
 
   <Target Name="DeployToModFolder" AfterTargets="Build">
     <MakeDir Directories="$(ModDeployDir)\Assemblies" />
